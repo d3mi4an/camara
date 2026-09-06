@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Prueba</title>
+
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    .contenedor {
+      padding: 50px 20px;
+    }
+
+    h1 {
+      font-size: 25px;
+    }
+
+    button {
+      padding: 15px 20px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #permisos {
+      position: fixed;
+      top: 15px;
+      right: 15px;
+      background: #222;
+      color: white;
+      border-radius: 50%;
+      width: 45px;
+      height: 45px;
+      padding: 0;
+    }
+
+    #panel {
+      display: none;
+      position: fixed;
+      top: 70px;
+      right: 15px;
+      width: 250px;
+      background: #222;
+      border-radius: 12px;
+      padding: 15px;
+      text-align: left;
+    }
+  </style>
+</head>
+
+<body>
+
+  <button id="permisos">⚙️</button>
+
+  <div id="panel">
+
+    <h3>Permisos</h3>
+
+    <p>📷 Cámara</p>
+    <p id="estadoCamara">No permitida</p>
+
+    <p>🎤 Micrófono</p>
+    <p>No solicitado</p>
+
+    <p>📍 Ubicación</p>
+    <p>No solicitado</p>
+
+  </div>
+
+  <div class="contenedor">
+
+    <h1>😎 Prueba para los wachines</h1>
+
+    <p>Cuando estés listo, tocá el botón.</p>
+
+    <button id="camara">
+      📷 Aceptá el permiso de cámara, wachín
+    </button>
+
+  </div>
+
+  <script>
+
+    const boton = document.getElementById("camara");
+    const permisos = document.getElementById("permisos");
+    const panel = document.getElementById("panel");
+    const estado = document.getElementById("estadoCamara");
+
+    permisos.addEventListener("click", () => {
+
+      if (panel.style.display === "block") {
+        panel.style.display = "none";
+      } else {
+        panel.style.display = "block";
+      }
+
+    });
+
+    boton.addEventListener("click", async () => {
+
+      try {
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+
+        estado.textContent = "Permitida ✅";
+
+        alert("Permiso concedido correctamente.");
+
+        stream.getTracks().forEach(track => track.stop());
+
+      } catch (error) {
+
+        estado.textContent = "No permitida ❌";
+
+        alert("No se concedió el permiso.");
+
+      }
+
+    });
+
+  </script>
+
+</body>
+</html>
