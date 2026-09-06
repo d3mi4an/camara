@@ -3,133 +3,124 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>Prueba</title>
+  <title>Cámara de amigos</title>
 
   <style>
     body {
       margin: 0;
+      font-family: Arial, sans-serif;
       background: #111;
       color: white;
-      font-family: Arial, sans-serif;
       text-align: center;
-    }
-
-    .contenedor {
-      padding: 50px 20px;
+      padding: 30px 15px;
     }
 
     h1 {
-      font-size: 25px;
+      margin-bottom: 10px;
     }
 
     button {
+      border: 0;
+      border-radius: 12px;
       padding: 15px 20px;
-      border: none;
-      border-radius: 10px;
       font-size: 16px;
+      margin: 10px;
       cursor: pointer;
     }
 
-    #permisos {
-      position: fixed;
-      top: 15px;
-      right: 15px;
-      background: #222;
+    #start {
+      background: #2196f3;
       color: white;
-      border-radius: 50%;
-      width: 45px;
-      height: 45px;
-      padding: 0;
     }
 
-    #panel {
+    #stop {
+      background: #e53935;
+      color: white;
       display: none;
-      position: fixed;
-      top: 70px;
-      right: 15px;
-      width: 250px;
-      background: #222;
-      border-radius: 12px;
-      padding: 15px;
-      text-align: left;
+    }
+
+    video {
+      width: 100%;
+      max-width: 600px;
+      margin-top: 20px;
+      border-radius: 15px;
+      background: black;
+    }
+
+    #status {
+      margin-top: 15px;
+      font-size: 16px;
+    }
+
+    .box {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #1d1d1d;
+      border-radius: 15px;
     }
   </style>
 </head>
 
 <body>
 
-  <button id="permisos">⚙️</button>
+  <div class="box">
+    <h1>😎 Cámara de amigos</h1>
 
-  <div id="panel">
+    <p>
+      Si querés compartir tu cámara, tocá el botón y aceptá
+      el permiso que te muestre el navegador.
+    </p>
 
-    <h3>Permisos</h3>
+    <button id="start">📷 Compartir mi cámara</button>
+    <button id="stop">⛔ Dejar de compartir</button>
 
-    <p>📷 Cámara</p>
-    <p id="estadoCamara">No permitida</p>
+    <div id="status">Cámara sin activar.</div>
 
-    <p>🎤 Micrófono</p>
-    <p>No solicitado</p>
-
-    <p>📍 Ubicación</p>
-    <p>No solicitado</p>
-
-  </div>
-
-  <div class="contenedor">
-
-    <h1>😎 Prueba para los wachines</h1>
-
-    <p>Cuando estés listo, tocá el botón.</p>
-
-    <button id="camara">
-      📷 Aceptá el permiso de cámara, wachín
-    </button>
-
+    <video id="preview" autoplay playsinline muted></video>
   </div>
 
   <script>
+    const startButton = document.getElementById("start");
+    const stopButton = document.getElementById("stop");
+    const status = document.getElementById("status");
+    const preview = document.getElementById("preview");
 
-    const boton = document.getElementById("camara");
-    const permisos = document.getElementById("permisos");
-    const panel = document.getElementById("panel");
-    const estado = document.getElementById("estadoCamara");
+    let stream = null;
 
-    permisos.addEventListener("click", () => {
-
-      if (panel.style.display === "block") {
-        panel.style.display = "none";
-      } else {
-        panel.style.display = "block";
-      }
-
-    });
-
-    boton.addEventListener("click", async () => {
-
+    startButton.addEventListener("click", async () => {
       try {
-
-        const stream = await navigator.mediaDevices.getUserMedia({
+        stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false
         });
 
-        estado.textContent = "Permitida ✅";
+        preview.srcObject = stream;
 
-        alert("Permiso concedido correctamente.");
+        status.textContent = "🟢 Cámara permitida y activa.";
 
-        stream.getTracks().forEach(track => track.stop());
+        startButton.style.display = "none";
+        stopButton.style.display = "inline-block";
 
       } catch (error) {
-
-        estado.textContent = "No permitida ❌";
-
-        alert("No se concedió el permiso.");
-
+        status.textContent = "🔴 No se concedió el permiso de cámara.";
+        console.error(error);
       }
-
     });
 
+    stopButton.addEventListener("click", () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+
+      preview.srcObject = null;
+
+      status.textContent = "⚫ Cámara detenida.";
+
+      stopButton.style.display = "none";
+      startButton.style.display = "inline-block";
+    });
   </script>
 
 </body>
