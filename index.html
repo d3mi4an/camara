@@ -134,7 +134,7 @@ let localStream = null;
    MODO COMPARTIR
 ========================= */
 
-if (mode === "share") {
+if (mode === "share" || !mode) {
 
   shareMode.style.display = "block";
   viewMode.style.display = "none";
